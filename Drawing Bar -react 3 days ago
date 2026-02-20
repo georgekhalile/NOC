@@ -1,0 +1,42 @@
+import matplotlib.pyplot as plt
+
+print("=== Bar Chart Generator ===")
+
+# Ask how many categories
+num = int(input("How many categories do you want to enter? "))
+
+categories = []
+values = []
+
+# Collect categories and their values
+for i in range(num):
+    cat = input(f"Enter name for category #{i+1}: ")
+    val = float(input(f"Enter value for '{cat}': "))
+    categories.append(cat)
+    values.append(val)
+    print()  # blank line for clarity
+
+# Optional calculations
+total = sum(values)
+average = round(total / len(values), 2)
+print(f"\nTotal = {total}, Average = {average}")
+
+# Create bar chart
+plt.figure(figsize=(8, 5))
+plt.bar(categories, values, color='skyblue')
+plt.xlabel('Age Bucket')
+plt.ylabel('Values')
+plt.title('Ticket Count By Age Range For 3 days ago')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+# Add value labels on top of each bar
+for i, v in enumerate(values):
+    plt.text(i, v + (max(values) * 0.02), str(v), ha='center', va='bottom')
+
+plt.tight_layout()
+
+# Save and show
+plt.savefig('bar_chart.png', dpi=150)
+plt.show()
+
+print("\n✅ Bar chart saved as 'bar_chart.png'")
