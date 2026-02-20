@@ -1,0 +1,49 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Categories
+categories = ['0-7 Days', '8-14 Days', '15-28 Days', 'Over 28 Days', 'Total']
+
+# Example data (replace these with your actual results)
+today_results = [14, 8, 10, 13, 45]      # Today's results
+last_week_results = [15, 9,14, 10, 48]  # Last week's results
+
+# Calculate difference (closing tickets)
+closing_tickets = [today - last_week for today, last_week in zip(today_results, last_week_results)]
+
+# Set position of bars on X-axis
+x = np.arange(len(categories))
+width = 0.35
+
+# Plotting the bars
+fig, ax = plt.subplots(figsize=(10, 6))
+bars1 = ax.bar(x - width/2, today_results, width, label='Today', color='skyblue')
+bars2 = ax.bar(x + width/2, last_week_results, width, label='Last Week', color='lightgreen')
+
+# Add line for difference (closing tickets)
+ax.plot(x, closing_tickets, color='red', marker='o', linestyle='-', linewidth=2, label='Closing Tickets')
+
+# Adding labels, title, and custom x-axis tick labels
+ax.set_xlabel('Ticket Age Range')
+ax.set_ylabel('Results')
+ax.set_title('Comparison of Today\'s Results vs Last Week\'s Results')
+ax.set_xticks(x)
+ax.set_xticklabels(categories)
+ax.legend()
+
+# Adding data labels on top of bars
+for bars in [bars1, bars2]:
+    for bar in bars:
+        height = bar.get_height()
+        ax.annotate(f'{height}',
+                    xy=(bar.get_x() + bar.get_width() / 2, height),
+                    xytext=(0, 3),
+                    textcoords="offset points",
+                    ha='center', va='bottom')
+
+# Adding data labels for the closing tickets line
+for i, value in enumerate(closing_tickets):
+    ax.annotate(f'{value}', xy=(x[i], value), xytext=(0, 5), textcoords='offset points', ha='center', color='red')
+
+plt.tight_layout()
+plt.show()
