@@ -1,0 +1,187 @@
+import os
+import re
+import traceback
+import datetime
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from tkinter import Tk, filedialog
+
+# ---------------- GLOBAL CHART SETTINGS ----------------
+plt.rcParams.update({
+    "figure.figsize": (12, 6),
+    "font.size": 9,
+    "axes.titlesize": 11,
+    "axes.labelsize": 9,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "legend.fontsize": 8
+})
+
+# ---------------- FILE PICKER ----------------
+def pick_excel_file():
+    Tk().withdraw()
+    path = filedialog.askopenfilename(
+        title="Select Ticket Excel File",
+        filetypes=[("Excel files", "*.xlsx *.xls")]
+    )
+    if not path:
+        raise SystemExit("No file selected.")
+    return path
+
+# ---------------- INPUT HELPERS ----------------
+def pick_from_list(title, items):
+    print(f"\n{title}")
+    for i, it in enumerate(items, 1):
+        print(f"  {i}. {it}")
+    while True:
+        raw = input("Select number: ").strip()
+        if raw.isdigit() and 1 <= int(raw) <= len(items):
+            return items[int(raw) - 1]
+        print("❌ Invalid selection.")
+
+def ask_yes_no(prompt):
+    while True:
+        ans = input(prompt).strip().lower()
+        if ans in ("y", "yes"):
+            return True
+        if ans in ("n", "no"):
+            return False
+        print("❌ Type yes or no.")
+
+# ---------------- CLEAN & PARSE ----------------
+def clean_text(s):
+    return s.fillna("Unassigned").astype(str).str.strip().replace({"": "Unassigned"})
+
+def parse_age_to_days(val):
+    if pd.isna(val):
+        return None
+    if isinstance(val, (int, float)):
+        return float(val)
+
+    text = str(val).lower().strip()
+    if text.isdigit():
+        return float(text)
+
+    days = 0.0
+    found = False
+
+    d = re.search(r"(\d+(\.\d+)?)\s*d", text)
+    h = re.search(r"(\d+(\.\d+)?)\s*h", text)
+
+    if d:
+        days += float(d.group(1))
+        found = True
+    if h:
+        days += float(h.group(1)) / 24
+        found = True
+
+    return days if found else None
+
+# ---------------- CHART FUNCTIONS ----------------
+def bar_chart(series, title, filename, outdir, top_n=15):
+    series = series.head(top_n)
+
+    plt.figure(figsize=(14, 6))
+    series.plot(kind="bar")
+    plt.title(title)
+    plt.ylabel("Average Age (days)")
+    plt.xticks(rotation=45, ha="right")
+    plt.margins(x=0.02)
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.25)
+
+    path = os.path.join(outdir, filename)
+    plt.savefig(path, dpi=200)
+    plt.close()
+    print(f"✅ Saved: {path}")
+
+def pie_chart(series, title, filename, outdir, top_n=10):
+    if len(series) > top_n:
+        top = series.head(top_n)
+        other = series.iloc[top_n:].sum()
+        top.loc["Other"] = other
+        series = top
+
+    plt.figure(figsize=(8, 8))
+    wedges, *_ = plt.pie(
+        series.values,
+        startangle=90,
+        autopct="%1.1f%%",
+        textprops={"fontsize": 8}
+    )
+
+    plt.legend(
+        wedges,
+        series.index,
+        title="Category",
+        loc="center left",
+        bbox_to_anchor=(1, 0.5)
+    )
+
+    plt.title(title)
+    plt.tight_layout()
+
+    path = os.path.join(outdir, filename)
+    plt.savefig(path, dpi=200, bbox_inches="tight")
+    plt.close()
+    print(f"✅ Saved: {path}")
+
+# ---------------- MAIN ----------------
+def main():
+    print("=== Ticket Chart Generator ===")
+    print("Working directory:", os.getcwd())
+
+    excel_path = pick_excel_file()
+    print("✅ File:", excel_path)
+
+    xls = pd.ExcelFile(excel_path)
+    sheet = pick_from_list("Available sheets:", xls.sheet_names)
+    df = pd.read_excel(excel_path, sheet_name=sheet)
+
+    cols = list(df.columns)
+    group_col = pick_from_list("Select Assignee GROUP column:", cols)
+    person_col = pick_from_list("Select Assignee PERSON column:", cols)
+
+    if ask_yes_no("Does the sheet have an Age column? (yes/no): "):
+        age_col = pick_from_list("Select Age column:", cols)
+        df["AgeDays"] = df[age_col].apply(parse_age_to_days)
+    else:
+        created_col = pick_from_list("Select Created Date column:", cols)
+        df[created_col] = pd.to_datetime(df[created_col], errors="coerce")
+        today = datetime.datetime.today().date()
+        df["AgeDays"] = (pd.Timestamp(today) - df[created_col].dt.normalize()).dt.days
+
+    df[group_col] = clean_text(df[group_col])
+    df[person_col] = clean_text(df[person_col])
+
+    df["AgeDays"] = pd.to_numeric(df["AgeDays"], errors="coerce")
+    df = df[df["AgeDays"].notna() & (df["AgeDays"] >= 0)]
+
+    if df.empty:
+        print("❌ No valid rows after cleaning. Check Age values.")
+        return
+
+    outdir = os.path.join(os.getcwd(), "charts_output")
+    os.makedirs(outdir, exist_ok=True)
+
+    group_avg = df.groupby(group_col)["AgeDays"].mean().sort_values(ascending=False)
+    group_cnt = df[group_col].value_counts()
+
+    person_avg = df.groupby(person_col)["AgeDays"].mean().sort_values(ascending=False)
+    person_cnt = df[person_col].value_counts()
+
+    bar_chart(group_avg, "Assignee Group vs Average Ticket Age", "group_avg_age_bar.png", outdir)
+    pie_chart(group_cnt, "Assignee Group vs Ticket Count", "group_ticket_share_pie.png", outdir)
+
+    bar_chart(person_avg, "Assignee Person vs Average Ticket Age", "person_avg_age_bar.png", outdir)
+    pie_chart(person_cnt, "Assignee Person vs Ticket Count", "person_ticket_share_pie.png", outdir)
+
+    print("\n✅ Charts created in:", outdir)
+
+# ---------------- RUN ----------------
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        traceback.print_exc()
