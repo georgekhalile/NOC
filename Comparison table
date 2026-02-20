@@ -1,0 +1,67 @@
+import pandas as pd
+
+# Define the ticket age ranges
+age_ranges = ['0–7 Days', '8–14 Days', '15–28 Days', 'Over 28 Days']
+
+last_friday = []
+today = []
+
+print("=== Ticket Comparison Tool ===")
+print("Please enter the number of tickets for each age range.\n")
+
+# Ask the user to input ticket counts
+for age in age_ranges:
+    lf = int(input(f"Enter number of tickets for '{age}' (Last Friday): "))
+    td = int(input(f"Enter number of tickets for '{age}' (Today): "))
+    last_friday.append(lf)
+    today.append(td)
+    print()  # blank line for readability
+
+# Calculate totals
+total_last_friday = sum(last_friday)
+total_today = sum(today)
+
+# Calculate difference and percentage change
+difference = [td - lf for lf, td in zip(last_friday, today)]
+percent_change = [
+    round(((td - lf) / lf * 100) if lf != 0 else 0, 1)
+    for lf, td in zip(last_friday, today)
+]
+
+# Calculate tickets closed (positive number means closed tickets)
+tickets_closed = [(lf - td) if td < lf else 0 for lf, td in zip(last_friday, today)]
+total_closed = sum(tickets_closed)
+
+# Add totals row
+age_ranges_with_total = age_ranges + ['TOTAL']
+last_friday_with_total = last_friday + [total_last_friday]
+today_with_total = today + [total_today]
+difference_with_total = difference + [total_today - total_last_friday]
+
+# Avoid division by zero for total percent change
+total_percent_change = round(((total_today - total_last_friday) / total_last_friday * 100), 1) if total_last_friday != 0 else 0
+percent_change_with_total = percent_change + [total_percent_change]
+
+tickets_closed_with_total = tickets_closed + [total_closed]
+
+# Create DataFrame
+df = pd.DataFrame({
+    'Ticket Age Range': age_ranges_with_total,
+    'Last Friday': last_friday_with_total,
+    'Today': today_with_total,
+    'Difference (Today - Last Week)': difference_with_total,
+    '% Change': percent_change_with_total,
+    'Tickets Closed': tickets_closed_with_total
+})
+
+# Export to Excel
+output_file = 'ticket_comparison.xlsx'
+df.to_excel(output_file, index=False)
+
+# ✅ Print results in a clean table format (Spyder-safe)
+print("\n📊 Ticket Comparison Summary\n")
+print(df.to_string(index=False, col_space=18, justify='center'))
+
+# Show summary
+print(f"\n📉 Total Tickets Closed Since Last Friday: {total_closed}")
+print(f"\n✅ Excel file '{output_file}' has been created successfully!")
