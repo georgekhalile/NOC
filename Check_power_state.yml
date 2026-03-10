@@ -1,0 +1,47 @@
+
+---
+- name: Check whether servers in [servers_to_check] are reachable (on) or unreachable (off)
+  hosts: servers_to_check
+  gather_facts: false
+  any_errors_fatal: false
+
+  vars:
+    # Adjust the timeout to your environment & boot/latency expectations
+    connection_timeout_seconds: 10
+
+  tasks:
+    - name: Try to establish an Ansible control connection
+      block:
+        - name: Wait for connection
+          wait_for_connection:
+            timeout: "{{ connection_timeout_seconds }}"
+        - name: Mark host as ON
+          set_fact:
+            power_state: "on"
+      rescue:
+        - name: Mark host as OFF if connection failed
+          set_fact:
+            power_state: "off"
+      always:
+        - name: Emit per-host status
+          debug:
+            msg: "Server {{ inventory_hostname }} is {{ power_state }}"
+
+    # Optional: build a summary (runs once, on localhost)
+    - name: Build summary lists of ON/OFF hosts
+      run_once: true
+      delegate_to: localhost
+      vars:
+        on_hosts:  "{{ groups['servers_to_check'] | select('in', groups['servers_to_check']) | select('equalto','dummy') | list }}"  # placeholder to keep vars block neat
+      set_fact:
+        servers_on:  "{{ groups['servers_to_check'] | map('extract', hostvars, 'power_state') | list | zip(groups['servers_to_check']) | selectattr('0','equalto','on')  | map('last') | list }}"
+        servers_off: "{{ groups['servers_to_check'] | map('extract', hostvars, 'power_state') | list | zip(groups['servers_to_check']) | selectattr('0','equalto','off') | map('last') | list }}"
+
+    - name: Print summary
+      run_once: true
+      delegate_to: localhost
+      debug:
+        msg:
+          - "==== SUMMARY ===="
+          - "ON : {{ servers_on  | default([]) | join(', ') if (servers_on  | default([])) | length > 0 else 'None' }}"
+          - "OFF: {{ servers_off | default([]) | join(', ') if (servers_off | default([])) | length > 0 else 'None' }}"
