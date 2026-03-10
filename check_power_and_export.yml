@@ -1,0 +1,71 @@
+---
+- name: ICMP check of [servers_to_check] and export to single Excel file
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    output_dir: "./reports"
+    csv_path: "{{ output_dir }}/server_power_status.csv"
+    xlsx_path: "{{ output_dir }}/server_power_status.xlsx"
+
+    # macOS ping
+    ping_cmd: "ping -c 1 -W 1000"
+
+  tasks:
+    - name: Ensure output directory exists
+      file:
+        path: "{{ output_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Create CSV header (overwrite)
+      copy:
+        dest: "{{ csv_path }}"
+        mode: '0644'
+        content: |
+          Host,Address,ICMP_Up,Power_State
+
+    - name: Ping each host and append a CSV line
+      vars:
+        addr: "{{ hostvars[h].ansible_host | default(h) }}"
+      shell: |
+        if {{ ping_cmd }} {{ addr }} >/dev/null 2>&1; then
+          echo "{{ h }},{{ addr }},true,on" >> "{{ csv_path }}"
+        else
+          echo "{{ h }},{{ addr }},false,off" >> "{{ csv_path }}"
+        fi
+      args:
+        executable: /bin/bash
+      loop: "{{ groups['servers_to_check'] }}"
+      loop_control:
+        loop_var: h
+
+    - name: Install openpyxl if not present
+      pip:
+        name: openpyxl
+        state: present
+        executable: pip3
+
+    - name: Convert CSV to a single Excel file
+      shell: |
+        python3 - <<'PY'
+        import csv
+        from openpyxl import Workbook
+
+        csv_path = r"{{ csv_path }}"
+        xlsx_path = r"{{ xlsx_path }}"
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Server_Status"
+
+        with open(csv_path, newline='') as f:
+            for row in csv.reader(f):
+                ws.append(row)
+
+        wb.save(xlsx_path)
+        PY
+
+    - name: Show Excel file path
+      debug:
+        msg: "Excel report created: {{ xlsx_path }}"
