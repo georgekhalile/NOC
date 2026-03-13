@@ -1,0 +1,64 @@
+# Install once if needed:
+# Install-Module ImportExcel -Scope CurrentUser
+
+$excelPath = "/Users/george.khalil@lausd.net/PycharmProjects/PythonProject1/PatchingList.xlsx"
+
+# Read servers tab
+$servers = Import-Excel -Path $excelPath -WorksheetName "Servers"
+
+# Read recipients tab
+$recipients = Import-Excel -Path $excelPath -WorksheetName "Recipients"
+
+# Convert to clean lists
+$serverList = $servers | ForEach-Object { $_.ServerName } | Where-Object { $_ -and $_.Trim() -ne "" }
+$recipientList = $recipients | ForEach-Object { $_.Email } | Where-Object { $_ -and $_.Trim() -ne "" }
+
+$serverCount = $serverList.Count
+$serverText = $serverList -join "`r`n"
+$recipientText = $recipientList -join "; "
+
+$emailBody = @"
+PRE-PATCHING REQUIREMENTS
+
+Patching will NOT begin until the following are received:
+• WO / CRQ
+• Acknowledgement of this meeting invite
+
+IMPORTANT:
+• Patching will not start until acknowledgement is received.
+• Patching snapshots will be removed 2 days post-patching.
+
+DBA TEAM – PRE-PATCHING CHECKLIST
+Please reply to this notification when the database and applications are down for the following servers (if applicable).
+
+OS TEAM – PRE-PATCHING CHECKLIST
+1. Remove existing VMware snapshots
+2. Take new VMware snapshots
+3. Notify the UDT team when patching is ready to commence
+
+UDT TEAM – PATCHING INSTRUCTIONS
+• Await confirmation from the OS Team before starting patching
+• Follow any special instructions
+• Confirm with OS Team before sending the final completion notification
+
+EMAIL NOTIFICATIONS
+Send notifications before and after patching to the following recipients:
+
+$recipientText
+
+SERVERS
+Patching will be applied to the following servers:
+Number of servers to be patched: $serverCount
+
+$serverText
+
+SPECIAL INSTRUCTIONS
+Verify all databases/apps are back up post patching.
+"@
+
+$outlook = New-Object -ComObject Outlook.Application
+$mail = $outlook.CreateItem(0)
+$mail.To = $recipientText
+$mail.Subject = "OS Patching Reminder Only - No Meeting"
+$mail.Body = $emailBody
+$mail.Display()
